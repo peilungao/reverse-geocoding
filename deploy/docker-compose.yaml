@@ -1,0 +1,41 @@
+name: reverse_geocoding
+
+services:
+  reverse_geocoding:
+    image: ${ACR_PREFIX:?ACR_PREFIX is required}/reverse_geocoding:1.0.0
+    container_name: reverse_geocoding
+    restart: unless-stopped
+    init: true
+    env_file:
+      - .env
+    environment:
+      LISTEN_ADDRESS: :8080
+      DATABASE_PATH: /data/cache.sqlite
+      AMAP_COORDINATE_SYSTEM: gcj02
+      AMAP_RPS: '2'
+      GEOAPIFY_RPS: '2'
+      CACHE_PRECISION: '4'
+      CACHE_TTL: 720h
+      UPSTREAM_TIMEOUT: 10s
+      RATE_LIMIT_WAIT: 15s
+    volumes:
+      - /volume2/appdata/reverse_geocoding:/data
+    networks:
+      dawarich:
+        aliases:
+          - reverse_geocoding
+    healthcheck:
+      test: [CMD-SHELL, wget -q -O /dev/null http://127.0.0.1:8080/healthz]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 15s
+    logging:
+      options:
+        max-size: 20m
+        max-file: '3'
+
+networks:
+  dawarich:
+    external: true
+    name: dawarich_default
