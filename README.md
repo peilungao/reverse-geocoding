@@ -83,9 +83,14 @@ itself.
 
 The Compose manifest in `deploy/docker-compose.yaml` is installed at
 `/volume2/docker/reverse_geocoding/docker-compose.yaml`. Its credentials and
-`AMAP_DAILY_QUOTA` are rendered from OpenBao into
+`AMAP_DAILY_QUOTA` are rendered from OpenBao path
+`secret/apps/reverse_geocoding/runtime` into
 `/volume2/docker/reverse_geocoding/.env`. The durable SQLite cache and quota
 counter live at `/volume2/appdata/reverse_geocoding/cache.sqlite`.
+
+The deployment pins the full ACR reference rather than relying on an implicit
+shell variable, so ordinary `docker compose` invocations on the NAS resolve
+the reviewed image deterministically.
 
 `AMAP_DAILY_QUOTA` is intentionally not guessed. Set it below the daily quota
 for the exact AMap key in use, leaving margin for requests made outside this

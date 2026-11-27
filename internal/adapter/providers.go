@@ -40,11 +40,11 @@ type amapReverseResponse struct {
 	Regeocode struct {
 		FormattedAddress string `json:"formatted_address"`
 		AddressComponent struct {
-			Country    string `json:"country"`
-			Province   string `json:"province"`
-			City       string `json:"city"`
-			District   string `json:"district"`
-			Township   string `json:"township"`
+			Country    string          `json:"country"`
+			Province   string          `json:"province"`
+			City       json.RawMessage `json:"city"`
+			District   string          `json:"district"`
+			Township   string          `json:"township"`
 			StreetData struct {
 				Street string `json:"street"`
 				Number string `json:"number"`
@@ -109,7 +109,11 @@ func (client *upstreamClient) reverseChina(context context.Context, original poi
 	}
 
 	component := response.Regeocode.AddressComponent
-	city := nonEmpty(component.City, component.Province)
+	cityValue, err := amapText(component.City)
+	if err != nil {
+		return photonFeatureCollection{}, fmt.Errorf("decode AMap city: %w", err)
+	}
+	city := nonEmpty(cityValue, component.Province)
 	name := nonEmpty(response.Regeocode.FormattedAddress, joinNonEmpty("", component.Province, city, component.District, component.Township, component.StreetData.Street, component.StreetData.Number))
 	return photonFeatureCollection{
 		Type: "FeatureCollection",
@@ -136,6 +140,27 @@ func (client *upstreamClient) reverseChina(context context.Context, original poi
 			},
 		}},
 	}, nil
+}
+
+// amapText normalizes AMap's documented polymorphic address fields. Some
+// direct-administered cities return city as an empty JSON array instead of a
+// string; both forms mean that the province should be used as the city label.
+func amapText(raw json.RawMessage) (string, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return "", nil
+	}
+
+	var value string
+	if err := json.Unmarshal(raw, &value); err == nil {
+		return value, nil
+	}
+
+	var values []string
+	if err := json.Unmarshal(raw, &values); err == nil {
+		return joinNonEmpty("", values...), nil
+	}
+
+	return "", fmt.Errorf("expected string or string array")
 }
 
 func (client *upstreamClient) reverseGlobal(context context.Context, original point) (photonFeatureCollection, error) {

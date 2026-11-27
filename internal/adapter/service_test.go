@@ -22,7 +22,7 @@ func TestReverseRoutesChinaToAmapAndGlobalToGeoapify(t *testing.T) {
 		if got := request.URL.Query().Get("location"); got != "116.397499,39.908722" {
 			t.Errorf("AMap location = %q", got)
 		}
-		_, _ = writer.Write([]byte(`{"status":"1","info":"OK","regeocode":{"formatted_address":"北京市东城区景山前街4号","addressComponent":{"country":"中国","province":"北京市","city":"","district":"东城区","township":"景山街道","streetNumber":{"street":"景山前街","number":"4号"}}}}`))
+		_, _ = writer.Write([]byte(`{"status":"1","info":"OK","regeocode":{"formatted_address":"北京市东城区景山前街4号","addressComponent":{"country":"中国","province":"北京市","city":[],"district":"东城区","township":"景山街道","streetNumber":{"street":"景山前街","number":"4号"}}}}`))
 	}))
 	defer amap.Close()
 
