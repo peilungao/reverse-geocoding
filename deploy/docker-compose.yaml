@@ -2,7 +2,7 @@ name: reverse_geocoding
 
 services:
   reverse_geocoding:
-    image: crpi-dclrub6cw0zn40ka.cn-beijing.personal.cr.aliyuncs.com/cicero_docker-images/reverse_geocoding:1.0.0
+    image: crpi-dclrub6cw0zn40ka.cn-beijing.personal.cr.aliyuncs.com/cicero_docker-images/reverse_geocoding:1.0.2
     container_name: reverse_geocoding
     restart: unless-stopped
     init: true

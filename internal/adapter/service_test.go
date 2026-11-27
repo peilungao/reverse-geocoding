@@ -2,11 +2,13 @@ package adapter
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -66,6 +68,26 @@ func TestReverseRoutesChinaToAmapAndGlobalToGeoapify(t *testing.T) {
 	if geoapifyCalls.Load() != 1 {
 		t.Fatalf("Geoapify calls = %d, want 1", geoapifyCalls.Load())
 	}
+}
+
+func TestUpstreamTransportFailureDoesNotExposeQuerySecrets(t *testing.T) {
+	client := &upstreamClient{
+		httpClient: &http.Client{Transport: failingRoundTripper{}},
+	}
+
+	_, err := client.get(t.Context(), "https://provider.example/reverse?apiKey=secret-value")
+	if err == nil {
+		t.Fatal("transport error = nil")
+	}
+	if strings.Contains(err.Error(), "secret-value") {
+		t.Fatalf("transport error exposed a query credential: %s", err)
+	}
+}
+
+type failingRoundTripper struct{}
+
+func (failingRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
+	return nil, fmt.Errorf("Get %q: EOF", request.URL.String())
 }
 
 func TestReverseCachesCoordinateGrid(t *testing.T) {

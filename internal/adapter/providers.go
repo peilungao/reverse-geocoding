@@ -231,7 +231,11 @@ func (client *upstreamClient) get(context context.Context, requestURL string) ([
 	}
 	response, err := client.httpClient.Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("send upstream request: %w", err)
+		// net/http's URL error includes the entire request URL, including the
+		// provider credential carried in its query string. Preserve no wrapped
+		// error here so a connection failure cannot disclose that credential in
+		// HTTP responses or container logs.
+		return nil, fmt.Errorf("send upstream request failed (%T)", err)
 	}
 	defer response.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(response.Body, 2<<20))
