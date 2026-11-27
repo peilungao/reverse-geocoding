@@ -46,8 +46,8 @@ type amapReverseResponse struct {
 			District   string          `json:"district"`
 			Township   string          `json:"township"`
 			StreetData struct {
-				Street string `json:"street"`
-				Number string `json:"number"`
+				Street string          `json:"street"`
+				Number json.RawMessage `json:"number"`
 			} `json:"streetNumber"`
 		} `json:"addressComponent"`
 	} `json:"regeocode"`
@@ -113,8 +113,12 @@ func (client *upstreamClient) reverseChina(context context.Context, original poi
 	if err != nil {
 		return photonFeatureCollection{}, fmt.Errorf("decode AMap city: %w", err)
 	}
+	streetNumber, err := amapText(component.StreetData.Number)
+	if err != nil {
+		return photonFeatureCollection{}, fmt.Errorf("decode AMap street number: %w", err)
+	}
 	city := nonEmpty(cityValue, component.Province)
-	name := nonEmpty(response.Regeocode.FormattedAddress, joinNonEmpty("", component.Province, city, component.District, component.Township, component.StreetData.Street, component.StreetData.Number))
+	name := nonEmpty(response.Regeocode.FormattedAddress, joinNonEmpty("", component.Province, city, component.District, component.Township, component.StreetData.Street, streetNumber))
 	return photonFeatureCollection{
 		Type: "FeatureCollection",
 		Features: []photonFeature{{
@@ -132,7 +136,7 @@ func (client *upstreamClient) reverseChina(context context.Context, original poi
 				"district":    component.District,
 				"locality":    component.Township,
 				"street":      component.StreetData.Street,
-				"housenumber": component.StreetData.Number,
+				"housenumber": streetNumber,
 				"osm_type":    "N",
 				"osm_id":      "",
 				"osm_key":     "place",
@@ -142,9 +146,9 @@ func (client *upstreamClient) reverseChina(context context.Context, original poi
 	}, nil
 }
 
-// amapText normalizes AMap's documented polymorphic address fields. Some
-// direct-administered cities return city as an empty JSON array instead of a
-// string; both forms mean that the province should be used as the city label.
+// amapText normalizes AMap's polymorphic address fields. Some values, including
+// city and street-number, are returned as an empty JSON array instead of a
+// string when the upstream has no value.
 func amapText(raw json.RawMessage) (string, error) {
 	if len(raw) == 0 || string(raw) == "null" {
 		return "", nil
