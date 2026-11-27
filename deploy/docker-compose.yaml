@@ -18,6 +18,8 @@ services:
       CACHE_TTL: 720h
       UPSTREAM_TIMEOUT: 10s
       RATE_LIMIT_WAIT: 15s
+      HTTPS_PROXY: socks5://10.200.34.1:1080
+      NO_PROXY: localhost,127.0.0.1,::1,reverse_geocoding,dawarich,redis,postgresql
     volumes:
       - /volume2/appdata/reverse_geocoding:/data
     networks:
