@@ -2,6 +2,8 @@ package adapter
 
 import (
 	"fmt"
+	"net"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -11,7 +13,12 @@ import (
 // logged or returned by health endpoints.
 type Config struct {
 	ListenAddress        string
-	DatabasePath         string
+	DatabaseHost         string
+	DatabasePort         int
+	DatabaseUsername     string
+	DatabasePassword     string
+	DatabaseName         string
+	DatabaseSSLMode      string
 	AmapBaseURL          string
 	AmapAPIKey           string
 	AmapCoordinateSystem string
@@ -31,7 +38,11 @@ type Config struct {
 func LoadConfig(getenv func(string) string) (Config, error) {
 	config := Config{
 		ListenAddress:        valueOr(getenv("LISTEN_ADDRESS"), ":8080"),
-		DatabasePath:         valueOr(getenv("DATABASE_PATH"), "/data/cache.sqlite"),
+		DatabaseHost:         strings.TrimSpace(getenv("DATABASE_HOST")),
+		DatabaseUsername:     strings.TrimSpace(getenv("DATABASE_USERNAME")),
+		DatabasePassword:     strings.TrimSpace(getenv("DATABASE_PASSWORD")),
+		DatabaseName:         strings.TrimSpace(getenv("DATABASE_NAME")),
+		DatabaseSSLMode:      valueOr(getenv("DATABASE_SSLMODE"), "disable"),
 		AmapBaseURL:          valueOr(getenv("AMAP_BASE_URL"), "https://restapi.amap.com/v3/geocode/regeo"),
 		AmapAPIKey:           strings.TrimSpace(getenv("AMAP_API_KEY")),
 		AmapCoordinateSystem: strings.ToLower(strings.TrimSpace(getenv("AMAP_COORDINATE_SYSTEM"))),
@@ -42,6 +53,21 @@ func LoadConfig(getenv func(string) string) (Config, error) {
 	if config.AmapAPIKey == "" {
 		return Config{}, fmt.Errorf("AMAP_API_KEY is required")
 	}
+	if config.DatabaseHost == "" {
+		return Config{}, fmt.Errorf("DATABASE_HOST is required")
+	}
+	if config.DatabaseUsername == "" {
+		return Config{}, fmt.Errorf("DATABASE_USERNAME is required")
+	}
+	if config.DatabasePassword == "" {
+		return Config{}, fmt.Errorf("DATABASE_PASSWORD is required")
+	}
+	if config.DatabaseName == "" {
+		return Config{}, fmt.Errorf("DATABASE_NAME is required")
+	}
+	if config.DatabaseSSLMode != "disable" && config.DatabaseSSLMode != "require" {
+		return Config{}, fmt.Errorf("DATABASE_SSLMODE must be disable or require")
+	}
 	if config.GeoapifyAPIKey == "" {
 		return Config{}, fmt.Errorf("GEOAPIFY_API_KEY is required")
 	}
@@ -51,6 +77,9 @@ func LoadConfig(getenv func(string) string) (Config, error) {
 
 	var err error
 	if config.AmapRPS, err = requiredPositiveFloat(getenv, "AMAP_RPS"); err != nil {
+		return Config{}, err
+	}
+	if config.DatabasePort, err = requiredPort(getenv, "DATABASE_PORT"); err != nil {
 		return Config{}, err
 	}
 	if config.GeoapifyRPS, err = requiredPositiveFloat(getenv, "GEOAPIFY_RPS"); err != nil {
@@ -78,6 +107,19 @@ func LoadConfig(getenv func(string) string) (Config, error) {
 	return config, nil
 }
 
+// PostgreSQLURL produces a credential-safe DSN for the adapter-owned schema.
+func (config Config) PostgreSQLURL() string {
+	return (&url.URL{
+		Scheme: "postgres",
+		User:   url.UserPassword(config.DatabaseUsername, config.DatabasePassword),
+		Host:   net.JoinHostPort(config.DatabaseHost, strconv.Itoa(config.DatabasePort)),
+		Path:   config.DatabaseName,
+		RawQuery: url.Values{
+			"sslmode": []string{config.DatabaseSSLMode},
+		}.Encode(),
+	}).String()
+}
+
 func valueOr(value, fallback string) string {
 	if strings.TrimSpace(value) == "" {
 		return fallback
@@ -99,6 +141,15 @@ func requiredPositiveInt(getenv func(string) string, key string) (int, error) {
 	parsed, err := strconv.Atoi(value)
 	if err != nil || parsed <= 0 {
 		return 0, fmt.Errorf("%s must be a positive integer", key)
+	}
+	return parsed, nil
+}
+
+func requiredPort(getenv func(string) string, key string) (int, error) {
+	value := strings.TrimSpace(getenv(key))
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed < 1 || parsed > 65535 {
+		return 0, fmt.Errorf("%s must be a TCP port", key)
 	}
 	return parsed, nil
 }

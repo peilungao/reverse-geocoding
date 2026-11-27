@@ -2,7 +2,7 @@ name: reverse_geocoding
 
 services:
   reverse_geocoding:
-    image: crpi-dclrub6cw0zn40ka.cn-beijing.personal.cr.aliyuncs.com/cicero_docker-images/reverse_geocoding:1.0.2
+    image: crpi-dclrub6cw0zn40ka.cn-beijing.personal.cr.aliyuncs.com/cicero_docker-images/reverse_geocoding:1.0.3
     container_name: reverse_geocoding
     restart: unless-stopped
     init: true
@@ -10,7 +10,11 @@ services:
       - .env
     environment:
       LISTEN_ADDRESS: :8080
-      DATABASE_PATH: /data/cache.sqlite
+      DATABASE_HOST: postgresql
+      DATABASE_PORT: '5432'
+      DATABASE_USERNAME: dawarich
+      DATABASE_NAME: dawarich
+      DATABASE_SSLMODE: disable
       AMAP_COORDINATE_SYSTEM: gcj02
       AMAP_RPS: '2'
       GEOAPIFY_RPS: '2'
@@ -20,12 +24,11 @@ services:
       RATE_LIMIT_WAIT: 15s
       HTTPS_PROXY: socks5://10.200.34.1:1080
       NO_PROXY: localhost,127.0.0.1,::1,reverse_geocoding,dawarich,redis,postgresql
-    volumes:
-      - /volume2/appdata/reverse_geocoding:/data
     networks:
       dawarich:
         aliases:
           - reverse_geocoding
+      postgresql:
     healthcheck:
       test: [CMD-SHELL, wget -q -O /dev/null http://127.0.0.1:8080/healthz]
       interval: 10s
@@ -41,3 +44,6 @@ networks:
   dawarich:
     external: true
     name: dawarich_default
+  postgresql:
+    external: true
+    name: postgresql

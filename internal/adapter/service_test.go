@@ -1,12 +1,12 @@
 package adapter
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -184,19 +184,64 @@ func TestMainlandBoundaryAndGCJConversion(t *testing.T) {
 
 func newTestService(t *testing.T, config Config) *service {
 	t.Helper()
-	config.DatabasePath = filepath.Join(t.TempDir(), "cache.sqlite")
 	config.ListenAddress = ":0"
 	config.CachePrecision = 4
 	config.CacheTTL = time.Hour
 	config.UpstreamTimeout = time.Second
 	config.RateLimitWait = time.Second
-	service, err := NewService(config, &http.Client{Timeout: time.Second})
+	boundary, err := loadMainlandBoundary()
 	if err != nil {
 		t.Fatal(err)
 	}
+	service := newService(config, &http.Client{Timeout: time.Second}, newMemoryCache(), boundary)
 	t.Cleanup(func() { _ = service.Close() })
 	return service
 }
+
+type memoryCache struct {
+	entries map[string]memoryEntry
+	usage   map[string]int
+	mutex   sync.Mutex
+}
+
+type memoryEntry struct {
+	payload   []byte
+	expiresAt time.Time
+}
+
+func newMemoryCache() *memoryCache {
+	return &memoryCache{entries: map[string]memoryEntry{}, usage: map[string]int{}}
+}
+
+func (cache *memoryCache) Get(_ context.Context, key string, now time.Time) ([]byte, bool, error) {
+	cache.mutex.Lock()
+	defer cache.mutex.Unlock()
+	entry, found := cache.entries[key]
+	if !found || !entry.expiresAt.After(now) {
+		return nil, false, nil
+	}
+	return append([]byte(nil), entry.payload...), true, nil
+}
+
+func (cache *memoryCache) Put(_ context.Context, key string, payload []byte, expiresAt time.Time) error {
+	cache.mutex.Lock()
+	defer cache.mutex.Unlock()
+	cache.entries[key] = memoryEntry{payload: append([]byte(nil), payload...), expiresAt: expiresAt}
+	return nil
+}
+
+func (cache *memoryCache) ConsumeQuota(_ context.Context, provider string, limit int, now time.Time) error {
+	cache.mutex.Lock()
+	defer cache.mutex.Unlock()
+	key := provider + ":" + now.UTC().Format("2006-01-02")
+	if cache.usage[key] >= limit {
+		return errQuotaExceeded
+	}
+	cache.usage[key]++
+	return nil
+}
+
+func (*memoryCache) Close() error { return nil }
 
 func testConfig(amapURL, geoapifyURL string) Config {
 	return Config{

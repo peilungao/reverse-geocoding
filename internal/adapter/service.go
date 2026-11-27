@@ -18,7 +18,7 @@ import (
 
 type service struct {
 	config          Config
-	cache           *Cache
+	cache           cacheStore
 	client          *upstreamClient
 	boundary        *mainlandBoundary
 	amapLimiter     *rate.Limiter
@@ -34,14 +34,17 @@ func NewService(config Config, httpClient *http.Client) (*service, error) {
 	if err != nil {
 		return nil, err
 	}
-	cache, err := OpenCache(config.DatabasePath)
+	cache, err := OpenCache(config)
 	if err != nil {
 		return nil, err
 	}
+	return newService(config, httpClient, cache, boundary), nil
+}
+
+func newService(config Config, httpClient *http.Client, cache cacheStore, boundary *mainlandBoundary) *service {
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: config.UpstreamTimeout}
 	}
-
 	return &service{
 		config:          config,
 		cache:           cache,
@@ -50,7 +53,7 @@ func NewService(config Config, httpClient *http.Client) (*service, error) {
 		amapLimiter:     rate.NewLimiter(rate.Limit(config.AmapRPS), 1),
 		geoapifyLimiter: rate.NewLimiter(rate.Limit(config.GeoapifyRPS), 1),
 		clock:           time.Now,
-	}, nil
+	}
 }
 
 // Close releases the persistent cache database.
